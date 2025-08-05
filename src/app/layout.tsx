@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Daily Flirt',
   description: 'Daily flirty comments for every occasion',
+  icons: {
+    icon: '/lips.svg',
+  },
 };
 
 export default function RootLayout({
