@@ -6,7 +6,7 @@ import './globals.css'; // Your global styles including Tailwind
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Daily Flirt',
+  title: 'Flirt of the Day',
   description: 'Daily flirty comments for every occasion',
   icons: {
     icon: '/lips.svg',

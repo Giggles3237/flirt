@@ -199,16 +199,13 @@ export default function DailyFlirtPastelMinimal() {
         <div className="absolute top-4 left-4 text-5xl opacity-30 select-none">💕</div>
         <div className="absolute bottom-4 right-4 text-5xl opacity-30 select-none">✨</div>
 
-        <h1 className="text-4xl font-serif text-rose-500 mb-2 text-center">Daily Flirt</h1>
+        <h1 className="text-4xl font-serif text-rose-500 mb-2 text-center">Flirt of the Day</h1>
         <p className="text-center text-rose-400 mb-6 italic">
-          Your daily dose of tingles (
-          <button 
-            onClick={handleIYKYKClick}
-            className="text-rose-400 hover:text-rose-600 transition-colors duration-300 cursor-pointer"
-          >
-            IYKYK
-          </button>
-          )
+          Your daily{' '}
+          <button onClick={handleIYKYKClick} className="text-rose-400">
+            wink
+          </button>{' '}
+          and mischievous smile.
         </p>
 
         {/* Date Selection Section */}
