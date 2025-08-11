@@ -88,10 +88,7 @@ export default function DailyFlirtPastelMinimal() {
   const [imageLoading, setImageLoading] = useState(false);
   const [isAgeVerified, setIsAgeVerified] = useState(false);
   const [showAgeVerification, setShowAgeVerification] = useState(false);
-  const [showCountdown, setShowCountdown] = useState(false);
-  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-
-  const targetDate = new Date('December 17, 2027 18:00:00').getTime();
+  const [fireworks, setFireworks] = useState<Array<{ id: number; left: number; top: number }>>([]);
 
   const bgClasses = {
     light: 'bg-gradient-to-br from-rose-50 via-amber-50 to-pink-100',
@@ -153,8 +150,14 @@ export default function DailyFlirtPastelMinimal() {
     setFlirtLevel('graphicFlirtyComment');
   };
 
-  const handleCountdownClick = () => {
-    setShowCountdown(true);
+  const handleFireworksClick = () => {
+    const newFireworks = Array.from({ length: 8 }, (_, i) => ({
+      id: Date.now() + i,
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+    }));
+    setFireworks(newFireworks);
+    setTimeout(() => setFireworks([]), 1500);
   };
 
   const currentComment = commentsData.find(comment => comment.date === selectedDate) as CommentEntry | undefined;
@@ -168,30 +171,6 @@ export default function DailyFlirtPastelMinimal() {
     }
   }, [selectedDate, currentComment]);
 
-  // Countdown timer effect
-  useEffect(() => {
-    if (!showCountdown) return;
-
-    const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const distance = targetDate - now;
-
-      if (distance < 0) {
-        setCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        clearInterval(timer);
-        return;
-      }
-
-      const days = Math.floor(distance / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((distance % (1000 * 60)) / 1000);
-
-      setCountdown({ days, hours, minutes, seconds });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [showCountdown]);
 
   return (
     <div className={`min-h-screen flex items-center justify-center p-6 transition-colors duration-700 ${bgClasses[mood]}`}>
@@ -317,8 +296,8 @@ export default function DailyFlirtPastelMinimal() {
           <span className="text-rose-400">Tailwind CSS</span>
         </p>
         <p className="mt-2 text-center text-rose-300 text-xs">
-          Made with <button 
-            onClick={handleCountdownClick}
+          Made with <button
+            onClick={handleFireworksClick}
             className="text-rose-400 cursor-pointer text-lg"
           >💕</button> by <span className="text-rose-400 font-bold">LaskoCreative</span>
         </p>
@@ -376,39 +355,17 @@ export default function DailyFlirtPastelMinimal() {
         </div>
       )}
 
-      {/* Countdown timer modal overlay */}
-      {showCountdown && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-6 rounded-3xl shadow-2xl max-w-sm w-full border border-rose-200 text-center relative">
-            <button
-              onClick={() => setShowCountdown(false)}
-              className="absolute top-2 right-3 text-rose-400 hover:text-rose-600 transition-colors duration-300 text-xl font-bold"
+      {fireworks.length > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-50">
+          {fireworks.map((f) => (
+            <span
+              key={f.id}
+              className="firework text-4xl"
+              style={{ left: `${f.left}%`, top: `${f.top}%` }}
             >
-              ×
-            </button>
-            <div className="space-y-4">
-              <div className="text-4xl">⏰</div>
-              
-              <div className="grid grid-cols-4 gap-3">
-                <div className="bg-rose-100 rounded-xl p-3 border border-rose-200">
-                  <div className="text-2xl font-bold text-rose-600">{countdown.days}</div>
-                  <div className="text-xs text-rose-500">Days</div>
-                </div>
-                <div className="bg-rose-100 rounded-xl p-3 border border-rose-200">
-                  <div className="text-2xl font-bold text-rose-600">{countdown.hours.toString().padStart(2, '0')}</div>
-                  <div className="text-xs text-rose-500">Hours</div>
-                </div>
-                <div className="bg-rose-100 rounded-xl p-3 border border-rose-200">
-                  <div className="text-2xl font-bold text-rose-600">{countdown.minutes.toString().padStart(2, '0')}</div>
-                  <div className="text-xs text-rose-500">Minutes</div>
-                </div>
-                <div className="bg-rose-100 rounded-xl p-3 border border-rose-200">
-                  <div className="text-2xl font-bold text-rose-600">{countdown.seconds.toString().padStart(2, '0')}</div>
-                  <div className="text-xs text-rose-500">Seconds</div>
-                </div>
-              </div>
-            </div>
-          </div>
+              🎆
+            </span>
+          ))}
         </div>
       )}
     </div>
