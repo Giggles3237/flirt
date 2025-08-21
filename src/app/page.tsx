@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import commentsData from '@/data/flirtyComments_with_risque.json';
+import { ShaderGradientCanvas } from '@paper-design/shaders-react';
 
 interface CommentEntry {
   date: string;
@@ -90,11 +91,11 @@ export default function DailyFlirtPastelMinimal() {
   const [showAgeVerification, setShowAgeVerification] = useState(false);
   const [fireworks, setFireworks] = useState<Array<{ id: number; left: number; top: number }>>([]);
 
-  const bgClasses = {
-    light: 'bg-gradient-to-br from-rose-50 via-amber-50 to-pink-100',
-    dreamy: 'bg-gradient-to-br from-indigo-100 via-purple-200 to-pink-100',
-    bold: 'bg-gradient-to-br from-rose-300 via-red-200 to-pink-300',
-  };
+  const shaderBackgrounds = {
+    light: 'sunrise',
+    dreamy: 'midnight',
+    bold: 'lava',
+  } as const;
 
   const handleMoodChange = () => {
     const moods: Array<'light' | 'dreamy' | 'bold'> = ['light', 'dreamy', 'bold'];
@@ -173,7 +174,11 @@ export default function DailyFlirtPastelMinimal() {
 
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-6 transition-colors duration-700 ${bgClasses[mood]}`}>
+    <div className="relative min-h-screen flex items-center justify-center p-6 transition-colors duration-700">
+      <ShaderGradientCanvas
+        className="absolute inset-0 -z-10"
+        shader={shaderBackgrounds[mood]}
+      />
       <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border border-rose-100 relative overflow-hidden">
         <div className="absolute top-4 left-4 text-5xl opacity-30 select-none">💕</div>
         <div className="absolute bottom-4 right-4 text-5xl opacity-30 select-none">✨</div>
