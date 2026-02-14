@@ -51,16 +51,6 @@ function findClosestDateToToday(): string {
   return closestDate;
 }
 
-function formatDateForDisplay(dateString: string): string {
-  const [month, day] = dateString.split(' ');
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-                     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const monthIndex = monthNames.indexOf(month);
-  const fullMonthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                         'July', 'August', 'September', 'October', 'November', 'December'];
-  return `${fullMonthNames[monthIndex]} ${day}`;
-}
-
 function dateStringToDate(dateString: string): Date {
   const [month, day] = dateString.split(' ');
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
@@ -86,7 +76,6 @@ export default function DailyFlirtPastelMinimal() {
   const [flirtLevel, setFlirtLevel] = useState<'flirtyComment' | 'risqueComment' | 'innocentlyDirtyComment' | 'graphicFlirtyComment'>('flirtyComment');
   const [dailyImage, setDailyImage] = useState<string>('');
   const [imageLoading, setImageLoading] = useState(false);
-  const [isAgeVerified, setIsAgeVerified] = useState(false);
   const [showAgeVerification, setShowAgeVerification] = useState(false);
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -118,29 +107,11 @@ export default function DailyFlirtPastelMinimal() {
     }
   };
 
-  const handleChangeImage = async () => {
-    if (currentComment) {
-      setImageLoading(true);
-      try {
-        // Add cache-busting parameter to force image reload
-        const newImageUrl = `${currentComment.risqueImageUrl}?v=${Date.now()}`;
-        setDailyImage(newImageUrl);
-      } catch (error) {
-        console.error('Failed to load new image:', error);
-        // Use fallback image
-        setDailyImage("https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=800&h=600&fit=crop");
-      } finally {
-        setImageLoading(false);
-      }
-    }
-  };
-
   const handleIYKYKClick = () => {
     setShowAgeVerification(true);
   };
 
   const handleAgeVerification = () => {
-    setIsAgeVerified(true);
     setShowAgeVerification(false);
     setFlirtLevel('graphicFlirtyComment');
   };
