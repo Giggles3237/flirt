@@ -1,534 +1,543 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import DatePicker from "react-datepicker";
-import "react-datepicker/dist/react-datepicker.css";
-import commentsData from "@/data/flirtyComments_with_risque.json";
-import { MeshGradient, NeuroNoise } from "@paper-design/shaders-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MeshGradient } from "@paper-design/shaders-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  RefreshCw,
+  Share2,
+  Shuffle,
+} from "lucide-react";
+import MonthPicker from "@/components/MonthPicker";
+import {
+  CommentEntry,
+  FlirtLevel,
+  MONTHS_LONG,
+  WEEKDAYS_LONG,
+  entryFor,
+  hasEntry,
+  neighbourOf,
+  parseDateString,
+  randomDate,
+  todayDateString,
+} from "@/lib/dates";
 
-interface CommentEntry {
-  date: string;
-  specialDay: string;
-  risqueImageUrl: string;
-  risquePrompt: string;
-  flirtyComment: string;
-  risqueComment: string;
-  innocentlyDirtyComment: string;
-  graphicFlirtyComment: string;
+const SECRET_LEVEL: FlirtLevel = "graphicFlirtyComment";
+
+const LEVELS: Array<{ key: FlirtLevel; label: string; theme: string }> = [
+  { key: "innocentlyDirtyComment", label: "Innocent", theme: "innocent" },
+  { key: "flirtyComment", label: "Flirty", theme: "flirty" },
+  { key: "risqueComment", label: "Risqué", theme: "risque" },
+  { key: SECRET_LEVEL, label: "After dark", theme: "afterdark" },
+];
+
+const FIELD_COLORS: Record<string, string[]> = {
+  innocent: ["#fff0f3", "#ffd1dc", "#ffb8cb", "#ffe5ec"],
+  flirty: ["#ff8fab", "#ff4d8d", "#ffb3c6", "#f72585"],
+  risque: ["#e63946", "#9d0208", "#ff4d6d", "#c1121f"],
+  afterdark: ["#1a0010", "#3c0a2a", "#7a0b3f", "#12000a"],
+};
+
+const SHAREABLE_LEVELS: FlirtLevel[] = ["innocentlyDirtyComment", "flirtyComment", "risqueComment"];
+const COUNTDOWN_TARGET = new Date("December 17, 2027 00:00:00").getTime();
+
+interface PhotoAttribution {
+  name: string;
+  profileUrl: string;
+  photoUrl: string;
 }
 
-function findClosestDateToToday(): string {
-  const today = new Date();
-  const currentMonth = today.getMonth();
-  const currentDay = today.getDate();
+interface TornSheet {
+  id: number;
+  entry: CommentEntry;
+  level: FlirtLevel;
+}
 
-  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const currentDateString = `${monthNames[currentMonth]} ${currentDay}`;
-
-  const exactMatch = commentsData.find((comment) => comment.date === currentDateString);
-  if (exactMatch) return currentDateString;
-
-  let closestDate = commentsData[0]?.date || "";
-  let minDifference = Infinity;
-
-  commentsData.forEach((comment) => {
-    if (comment.date) {
-      const [month, day] = comment.date.split(" ");
-      const commentMonth = monthNames.indexOf(month);
-      const commentDay = parseInt(day);
-      const difference = Math.abs(
-        commentMonth * 30 + commentDay - (currentMonth * 30 + currentDay)
-      );
-      if (difference < minDifference) {
-        minDifference = difference;
-        closestDate = comment.date;
-      }
-    }
+function preloadImage(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => resolve(true);
+    image.onerror = () => resolve(false);
+    image.src = url;
   });
-
-  return closestDate;
 }
 
-function dateStringToDate(dateString: string): Date {
-  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const [month, day] = dateString.split(" ");
-  const monthIndex = monthNames.indexOf(month);
-  return new Date(new Date().getFullYear(), monthIndex, parseInt(day));
+function lineSizeClass(line: string): string {
+  if (line.length <= 55) return "line line-short";
+  if (line.length <= 105) return "line line-medium";
+  return "line line-long";
 }
 
-function dateToDateString(date: Date): string {
-  const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return `${monthNames[date.getMonth()]} ${date.getDate()}`;
+function SheetFace({
+  entry,
+  level,
+  year,
+  children,
+}: {
+  entry: CommentEntry;
+  level: FlirtLevel;
+  year: number;
+  children?: React.ReactNode;
+}) {
+  const { month, day } = parseDateString(entry.date);
+  const weekday = WEEKDAYS_LONG[new Date(year, month, day).getDay()];
+  const line = entry[level];
+
+  return (
+    <>
+      <div className="sheet-date">
+        <span className="numeral">{day}</span>
+        <div className="sheet-day">
+          <span className="weekday">{weekday}</span>
+          <h2 className="special">{entry.specialDay}</h2>
+        </div>
+      </div>
+      <blockquote key={level} className={lineSizeClass(line)}>
+        &ldquo;{line}&rdquo;
+      </blockquote>
+      {children}
+    </>
+  );
 }
 
-const availableDates = commentsData.map((comment) => dateStringToDate(comment.date));
-
-export default function DailyFlirtPastelMinimal() {
-  const [mood, setMood] = useState<"light" | "dreamy" | "bold">("light");
-  const [selectedDate, setSelectedDate] = useState<string>(() => findClosestDateToToday());
-  const [flirtLevel, setFlirtLevel] = useState<
-    "flirtyComment" | "risqueComment" | "innocentlyDirtyComment" | "graphicFlirtyComment"
-  >("flirtyComment");
-  const [dailyImage, setDailyImage] = useState<string>("");
-  const [imageLoading, setImageLoading] = useState(false);
-  const [showAgeVerification, setShowAgeVerification] = useState(false);
+export default function FlirtOfTheDay() {
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [today, setToday] = useState("");
+  const [year, setYear] = useState(2026);
+  const [level, setLevel] = useState<FlirtLevel>("flirtyComment");
+  const [secretUnlocked, setSecretUnlocked] = useState(false);
+  const [torn, setTorn] = useState<TornSheet | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [showAgeGate, setShowAgeGate] = useState(false);
   const [showCountdown, setShowCountdown] = useState(false);
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  const [commentVisible, setCommentVisible] = useState(true);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [photoAttribution, setPhotoAttribution] = useState<{
-    name: string;
-    profileUrl: string;
-    photoUrl: string;
-  } | null>(null);
+  const [photoUrl, setPhotoUrl] = useState("");
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoAttribution, setPhotoAttribution] = useState<PhotoAttribution | null>(null);
 
-  // Read URL params on mount
+  const tearCount = useRef(0);
+  const swipeStart = useRef<number | null>(null);
+  const photoRequest = useRef(0);
+
+  const entry = selectedDate ? entryFor(selectedDate) : undefined;
+  const theme = LEVELS.find((item) => item.key === level)?.theme ?? "flirty";
+  const modalOpen = showAgeGate || showCountdown;
+
+  // Open on the date in the link, or today's page.
   useEffect(() => {
+    const now = new Date();
+    const todayString = todayDateString(now);
+    setToday(todayString);
+    setYear(now.getFullYear());
+
     const params = new URLSearchParams(window.location.search);
     const dateParam = params.get("date");
-    const levelParam = params.get("level");
+    const levelParam = params.get("level") as FlirtLevel | null;
 
-    if (dateParam) {
-      const decoded = decodeURIComponent(dateParam);
-      const exists = commentsData.find((c) => c.date === decoded);
-      if (exists) setSelectedDate(decoded);
-    }
-    if (
-      levelParam &&
-      ["flirtyComment", "risqueComment", "innocentlyDirtyComment"].includes(levelParam)
-    ) {
-      setFlirtLevel(levelParam as typeof flirtLevel);
-    }
+    setSelectedDate(dateParam && hasEntry(dateParam) ? dateParam : todayString);
+    if (levelParam && SHAREABLE_LEVELS.includes(levelParam)) setLevel(levelParam);
   }, []);
 
-  // Sync URL when date/level changes
+  // Keep the address bar shareable. The after-dark level never goes in a link.
   useEffect(() => {
+    if (!selectedDate) return;
     const params = new URLSearchParams();
     params.set("date", selectedDate);
-    if (flirtLevel !== "graphicFlirtyComment") {
-      params.set("level", flirtLevel);
-    }
+    if (level !== SECRET_LEVEL) params.set("level", level);
     window.history.replaceState(null, "", `?${params.toString()}`);
-  }, [selectedDate, flirtLevel]);
+  }, [selectedDate, level]);
 
-
-  const fadeOut = (callback: () => void) => {
-    setCommentVisible(false);
-    setTimeout(() => {
-      callback();
-      setCommentVisible(true);
-    }, 200);
-  };
-
-  const handleMoodChange = () => {
-    const moods: Array<"light" | "dreamy" | "bold"> = ["light", "dreamy", "bold"];
-    const currentIndex = moods.indexOf(mood);
-    setMood(moods[(currentIndex + 1) % moods.length]);
-  };
-
-  const handleDateChange = (date: Date | null) => {
-    if (date) {
-      const dateString = dateToDateString(date);
-      fadeOut(() => {
-        setSelectedDate(dateString);
-        setFlirtLevel("flirtyComment");
-      });
-    }
-  };
-
-  const handleFlirtLevelChange = (level: typeof flirtLevel) => {
-    fadeOut(() => setFlirtLevel(level));
-  };
-
-  const handleShowRandomComment = () => {
-    const randomIndex = Math.floor(Math.random() * commentsData.length);
-    const randomComment = commentsData[randomIndex];
-    if (randomComment.date) {
-      fadeOut(() => setSelectedDate(randomComment.date));
-    }
-  };
-
-  const loadUnsplashImage = async (specialDay: string) => {
-    setImageLoading(true);
-    setPhotoAttribution(null);
-    try {
-      const response = await fetch(
-        `/api/unsplash?specialDay=${encodeURIComponent(specialDay)}`,
-        { cache: "no-store" }
-      );
-      if (!response.ok) {
-        throw new Error("Image request failed");
+  const turnTo = useCallback(
+    (nextDate: string) => {
+      if (!selectedDate || nextDate === selectedDate) return;
+      const leaving = entryFor(selectedDate);
+      if (leaving) {
+        tearCount.current += 1;
+        setTorn({ id: tearCount.current, entry: leaving, level });
       }
-      const data = (await response.json()) as {
-        url: string;
-        attribution: {
-          name: string;
-          profileUrl: string;
-          photoUrl: string;
-        };
-      };
-      setDailyImage(data.url);
-      setPhotoAttribution(data.attribution);
-    } catch {
-      setDailyImage("https://picsum.photos/seed/" + encodeURIComponent(specialDay) + "/800/600");
-    } finally {
-      setImageLoading(false);
-    }
-  };
+      setSelectedDate(nextDate);
+      setCopied(false);
+      setLinkCopied(false);
+    },
+    [selectedDate, level]
+  );
 
-  const handleRefreshImage = () => {
-    if (currentComment) loadUnsplashImage(currentComment.specialDay);
-  };
+  const step = useCallback(
+    (direction: 1 | -1) => {
+      if (selectedDate) turnTo(neighbourOf(selectedDate, direction));
+    },
+    [selectedDate, turnTo]
+  );
+
+  // Arrow keys flip pages.
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (modalOpen || pickerOpen) return;
+      if (event.key === "ArrowRight") step(1);
+      if (event.key === "ArrowLeft") step(-1);
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [modalOpen, pickerOpen, step]);
+
+  // Escape closes whichever modal is open.
+  useEffect(() => {
+    if (!modalOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowAgeGate(false);
+        setShowCountdown(false);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [modalOpen]);
+
+  const loadPhoto = useCallback(async (specialDay: string) => {
+    const request = ++photoRequest.current;
+    setPhotoLoading(true);
+    let url = "";
+    let attribution: PhotoAttribution | null = null;
+    try {
+      const response = await fetch(`/api/unsplash?specialDay=${encodeURIComponent(specialDay)}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) throw new Error("Image request failed");
+      const data = (await response.json()) as { url: string; attribution: PhotoAttribution };
+      url = data.url;
+      attribution = data.attribution;
+    } catch {
+      url = `https://picsum.photos/seed/${encodeURIComponent(specialDay)}/800/600`;
+    }
+    // Only show the snapshot once the picture has actually arrived.
+    const loaded = await preloadImage(url);
+    if (request !== photoRequest.current) return;
+    setPhotoUrl(loaded ? url : "");
+    setPhotoAttribution(loaded ? attribution : null);
+    setPhotoLoading(false);
+  }, []);
+
+  const specialDay = entry?.specialDay;
+  useEffect(() => {
+    if (specialDay) loadPhoto(specialDay);
+  }, [specialDay, loadPhoto]);
+
+  useEffect(() => {
+    if (!showCountdown) return;
+    const update = () => {
+      const distance = Math.max(0, COUNTDOWN_TARGET - Date.now());
+      setCountdown({
+        days: Math.floor(distance / 86_400_000),
+        hours: Math.floor((distance % 86_400_000) / 3_600_000),
+        minutes: Math.floor((distance % 3_600_000) / 60_000),
+        seconds: Math.floor((distance % 60_000) / 1000),
+      });
+    };
+    update();
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [showCountdown]);
 
   const handleCopy = async () => {
-    if (currentComment) {
-      await navigator.clipboard.writeText(currentComment[flirtLevel]);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    if (!entry) return;
+    await navigator.clipboard.writeText(entry[level]);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleShare = async () => {
-    await navigator.clipboard.writeText(window.location.href);
+    const url = window.location.href;
+    if (typeof navigator.share === "function" && entry) {
+      try {
+        await navigator.share({ title: `Flirt of the Day: ${entry.specialDay}`, url });
+        return;
+      } catch {
+        // Share sheet dismissed or unavailable: fall through to copying the link.
+      }
+    }
+    await navigator.clipboard.writeText(url);
     setLinkCopied(true);
     setTimeout(() => setLinkCopied(false), 2000);
   };
 
-  const handleIYKYKClick = () => {
-    setShowAgeVerification(true);
+  const handleWink = () => {
+    if (secretUnlocked) setLevel(SECRET_LEVEL);
+    else setShowAgeGate(true);
   };
 
-  const handleAgeVerification = () => {
-    setShowAgeVerification(false);
-    fadeOut(() => setFlirtLevel("graphicFlirtyComment"));
+  const confirmAge = () => {
+    setShowAgeGate(false);
+    setSecretUnlocked(true);
+    setLevel(SECRET_LEVEL);
   };
 
-  const handleSecretCountdownClick = () => {
-    setShowCountdown(true);
-  };
-
-  const currentComment = commentsData.find(
-    (comment) => comment.date === selectedDate
-  ) as CommentEntry | undefined;
-
-  // Auto-load image when date changes
-  useEffect(() => {
-    if (currentComment) loadUnsplashImage(currentComment.specialDay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate]);
-
-  useEffect(() => {
-    if (!showCountdown) return;
-    const targetDate = new Date("December 17, 2027 00:00:00").getTime();
-    const updateCountdown = () => {
-      const now = Date.now();
-      const distance = Math.max(0, targetDate - now);
-      setCountdown({
-        days: Math.floor(distance / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
-        minutes: Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60)),
-        seconds: Math.floor((distance % (1000 * 60)) / 1000),
-      });
-    };
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [showCountdown]);
+  const visibleLevels = LEVELS.filter((item) => item.key !== SECRET_LEVEL || secretUnlocked);
+  const month = entry ? parseDateString(entry.date).month : 0;
 
   return (
-    <div className="relative min-h-screen flex items-center justify-center p-6 transition-colors duration-700">
-      <div className="absolute inset-0 -z-10">
-        {mood === "light" && (
-          <MeshGradient
-            style={{ width: "100%", height: "100%" }}
-            colors={["#fff0f3", "#ffb3c6", "#ff8fab", "#ffc8dd"]}
-            distortion={0.5}
-            swirl={0.2}
-            speed={0.5}
-          />
-        )}
-        {mood === "dreamy" && (
-          <NeuroNoise
-            style={{ width: "100%", height: "100%" }}
-            colorFront="#e8c5ff"
-            colorMid="#9b5de5"
-            colorBack="#1a0030"
-            brightness={0.1}
-            contrast={0.2}
-            speed={0.5}
-          />
-        )}
-        {mood === "bold" && (
-          <MeshGradient
-            style={{ width: "100%", height: "100%" }}
-            colors={["#ff4d6d", "#ff6b35", "#ffd60a", "#e63946"]}
-            distortion={0.9}
-            swirl={0.3}
-            speed={0.8}
-          />
-        )}
+    <div className="app" data-level={theme}>
+      <div className="field" aria-hidden>
+        <MeshGradient
+          style={{ width: "100%", height: "100%" }}
+          colors={FIELD_COLORS[theme]}
+          distortion={theme === "risque" ? 0.9 : 0.6}
+          swirl={0.25}
+          speed={0.4}
+        />
       </div>
 
-      <div className="max-w-md w-full bg-white rounded-3xl p-8 shadow-xl border border-rose-100 relative overflow-hidden">
-        <div className="absolute top-4 left-4 text-5xl opacity-30 select-none">💕</div>
-        <div className="absolute bottom-4 right-4 text-5xl opacity-30 select-none">✨</div>
-
-        <h1 className="text-4xl font-serif text-rose-500 mb-2 text-center">Flirt of the Day</h1>
-        <p className="text-center text-rose-400 mb-6 italic">
-          Your daily{" "}
-          <button onClick={handleIYKYKClick} className="text-rose-400">
-            wink
-          </button>{" "}
-          and mischievous smile.
-        </p>
-
-        {/* Date Selection */}
-        <div className="mb-6">
-          <label className="block text-rose-400 text-lg mb-2 text-center">✨ Select Your Date ✨</label>
-          <div className="relative">
-            <DatePicker
-              selected={dateStringToDate(selectedDate)}
-              onChange={handleDateChange}
-              includeDates={availableDates}
-              dateFormat="MMMM d"
-              placeholderText="Select a date"
-              className="w-full p-3 rounded-lg border border-rose-200 bg-white text-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-300 text-center"
-              wrapperClassName="w-full"
-              popperClassName="z-50"
-              popperPlacement="bottom"
-              showPopperArrow={false}
-              calendarClassName="border-rose-200 rounded-lg shadow-lg"
-              dayClassName={(date) => {
-                const dateString = dateToDateString(date);
-                const comment = commentsData.find((c) => c.date === dateString);
-                return comment ? "bg-rose-50 hover:bg-rose-100" : "";
-              }}
-            />
-          </div>
-
-          {currentComment && (
-            <div className="mt-4 bg-rose-50 rounded-xl p-4 text-center border border-rose-200">
-              <div className="text-xl font-bold text-rose-700">{currentComment.specialDay}</div>
-            </div>
-          )}
+      <header className="masthead">
+        <div>
+          <h1 className="wordmark">Flirt of the Day</h1>
+          <p className="tagline">
+            Your daily{" "}
+            <button type="button" className="hidden-trigger" onClick={handleWink}>
+              wink
+            </button>{" "}
+            and mischievous smile.
+          </p>
         </div>
+        <button
+          type="button"
+          className="field-button"
+          onClick={() => selectedDate && turnTo(randomDate(selectedDate))}
+        >
+          <Shuffle size={16} aria-hidden />
+          Surprise me
+        </button>
+      </header>
 
-        {/* Flirt Level */}
-        <div className="mb-6">
-          <p className="text-center text-rose-400 mb-3">Choose Your Flirt Level</p>
-          <div className="flex gap-3 justify-center">
-            {[
-              { key: "innocentlyDirtyComment", label: "Innocent" },
-              { key: "flirtyComment", label: "Flirty" },
-              { key: "risqueComment", label: "Risqué" },
-            ].map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => handleFlirtLevelChange(key as typeof flirtLevel)}
-                className={`px-4 py-2 rounded-xl font-medium transition-transform duration-300 border hover:scale-105 ${
-                  flirtLevel === key
-                    ? "bg-rose-100 border-rose-300 text-rose-600 shadow"
-                    : "bg-white border-rose-200 text-rose-400 hover:bg-rose-50"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Comment card with fade transition */}
-        {currentComment && (
-          <div
-            className={`transition-opacity duration-200 ${commentVisible ? "opacity-100" : "opacity-0"}`}
+      <main className="stage">
+        <div className="pad-wrap">
+          <article
+            className="pad"
+            onTouchStart={(event) => {
+              swipeStart.current = event.touches[0].clientX;
+            }}
+            onTouchEnd={(event) => {
+              if (swipeStart.current === null) return;
+              const travelled = event.changedTouches[0].clientX - swipeStart.current;
+              swipeStart.current = null;
+              if (Math.abs(travelled) > 60) step(travelled < 0 ? 1 : -1);
+            }}
           >
-            <div className="bg-rose-100 rounded-xl p-4 text-center text-rose-600 font-serif text-xl border border-rose-200 shadow-inner">
-              &ldquo;{currentComment[flirtLevel]}&rdquo;
-            </div>
-            <div className="flex gap-2 mt-3 justify-center">
+            <div className="band">
               <button
-                onClick={handleCopy}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border border-rose-200 text-rose-400 hover:bg-rose-50 transition-all duration-200"
+                type="button"
+                className="band-button"
+                onClick={() => setPickerOpen((open) => !open)}
+                aria-expanded={pickerOpen}
+                aria-haspopup="dialog"
+                aria-label={`${MONTHS_LONG[month]} ${year}. Choose a date`}
               >
-                {copied ? "✓ Copied!" : "📋 Copy"}
+                <span className="band-month">{entry ? MONTHS_LONG[month] : " "}</span>
+                <ChevronDown size={20} aria-hidden />
               </button>
-              <button
-                onClick={handleShare}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border border-rose-200 text-rose-400 hover:bg-rose-50 transition-all duration-200"
-              >
-                {linkCopied ? "✓ Link copied!" : "🔗 Share"}
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Daily Image */}
-        {currentComment && (
-          <div
-            className={`mt-6 space-y-4 transition-opacity duration-200 ${commentVisible ? "opacity-100" : "opacity-0"}`}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="text-rose-400 text-lg font-semibold">✨ Daily Mood Image ✨</h3>
-              <button
-                onClick={handleRefreshImage}
-                className="text-xs text-rose-400 hover:text-rose-500 border border-rose-200 rounded-lg px-2 py-1 hover:bg-rose-50 transition-all"
-                title="Refresh image"
-              >
-                🔄 Refresh
-              </button>
-            </div>
-
-            {dailyImage && !imageLoading && (
-              <div className="w-full rounded-xl overflow-hidden relative shadow-lg border border-rose-200 bg-white">
-                <img
-                  src={dailyImage}
-                  alt={`Daily image for ${currentComment.specialDay}`}
-                  className="w-full h-auto max-h-64 object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src =
-                      "https://images.unsplash.com/photo-1518895949257-7621c3c786d7?w=800&h=600&fit=crop&q=80";
+              <span className="band-year">{year}</span>
+              {pickerOpen && selectedDate && (
+                <MonthPicker
+                  year={year}
+                  selected={selectedDate}
+                  today={today}
+                  onSelect={(dateString) => {
+                    setPickerOpen(false);
+                    turnTo(dateString);
                   }}
+                  onClose={() => setPickerOpen(false)}
                 />
-                <div className="absolute bottom-2 right-2 bg-black/50 text-white/90 px-2 py-1 rounded-full text-xs backdrop-blur-sm">
-                  {currentComment.specialDay}
-                </div>
-              </div>
-            )}
-            {photoAttribution && !imageLoading && (
-              <p className="text-center text-rose-300 text-xs">
-                Photo by{" "}
-                <a href={photoAttribution.profileUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-rose-400">
-                  {photoAttribution.name}
-                </a>{" "}
-                on{" "}
-                <a href={photoAttribution.photoUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-rose-400">
-                  Unsplash
-                </a>
-              </p>
-            )}
+              )}
+            </div>
 
-            {imageLoading && (
-              <div className="w-full h-48 rounded-xl bg-rose-50 flex items-center justify-center border border-rose-200">
-                <div className="text-rose-400 text-sm">Loading image...</div>
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-rose-400 ml-2"></div>
-              </div>
-            )}
-
-            {!dailyImage && !imageLoading && (
-              <div className="w-full h-48 rounded-xl bg-rose-50 flex items-center justify-center border border-rose-200">
-                <div className="text-center text-rose-400">
-                  <div className="text-3xl mb-2">🖼️</div>
-                  <div className="text-sm">No image available for this date</div>
+            <div className="sheet-slot">
+              {entry && (
+                <section className="sheet" key={entry.date} aria-live="polite">
+                  <SheetFace entry={entry} level={level} year={year}>
+                    <div className="sheet-actions">
+                      <button type="button" className="sheet-button" onClick={handleCopy}>
+                        {copied ? <Check size={16} aria-hidden /> : <Copy size={16} aria-hidden />}
+                        {copied ? "Copied" : "Copy line"}
+                      </button>
+                      <button type="button" className="sheet-button" onClick={handleShare}>
+                        {linkCopied ? <Check size={16} aria-hidden /> : <Share2 size={16} aria-hidden />}
+                        {linkCopied ? "Link copied" : "Share"}
+                      </button>
+                    </div>
+                  </SheetFace>
+                </section>
+              )}
+              {torn && (
+                <div
+                  className="sheet sheet-torn"
+                  key={torn.id}
+                  aria-hidden
+                  onAnimationEnd={(event) => {
+                    // The line inside has its own fade; only the tear itself ends the sheet.
+                    if (event.target === event.currentTarget) setTorn(null);
+                  }}
+                >
+                  <SheetFace entry={torn.entry} level={torn.level} year={year}>
+                    <div className="sheet-actions sheet-actions-ghost" />
+                  </SheetFace>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          </article>
+
+        </div>
+
+        <div className="heat" role="radiogroup" aria-label="How bold should the line be?">
+          {visibleLevels.map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              role="radio"
+              aria-checked={level === item.key}
+              className="heat-stop"
+              onClick={() => setLevel(item.key)}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
+        {selectedDate && (
+          <nav className="day-nav" aria-label="Other days">
+            <button type="button" className="field-button" onClick={() => step(-1)}>
+              <ChevronLeft size={16} aria-hidden />
+              {neighbourOf(selectedDate, -1)}
+            </button>
+            <button
+              type="button"
+              className="field-button"
+              onClick={() => turnTo(today)}
+              disabled={selectedDate === today}
+            >
+              Today
+            </button>
+            <button type="button" className="field-button" onClick={() => step(1)}>
+              {neighbourOf(selectedDate, 1)}
+              <ChevronRight size={16} aria-hidden />
+            </button>
+          </nav>
         )}
 
-        <p className="mt-6 text-center text-rose-300 text-sm">
-          Powered by <span className="text-rose-400">Next.js</span> &{" "}
-          <span className="text-rose-400">Tailwind CSS</span>
-        </p>
+        {entry && photoUrl && !photoLoading && (
+          <figure className="snapshot" key={photoUrl}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photoUrl}
+              alt={`Photo for ${entry.specialDay}`}
+              onError={() => setPhotoUrl("")}
+            />
+            <figcaption>
+              {photoAttribution ? (
+                <span>
+                  <a href={photoAttribution.profileUrl} target="_blank" rel="noopener noreferrer">
+                    {photoAttribution.name}
+                  </a>{" "}
+                  on{" "}
+                  <a href={photoAttribution.photoUrl} target="_blank" rel="noopener noreferrer">
+                    Unsplash
+                  </a>
+                </span>
+              ) : (
+                <span>{entry.specialDay}</span>
+              )}
+              <button
+                type="button"
+                className="snapshot-refresh"
+                onClick={() => loadPhoto(entry.specialDay)}
+                aria-label="Show a different photo"
+                title="Show a different photo"
+              >
+                <RefreshCw size={14} aria-hidden />
+              </button>
+            </figcaption>
+          </figure>
+        )}
+      </main>
 
-        <p className="mt-2 text-center text-rose-300 text-xs">
-          Made with{" "}
-          <button
-            onClick={handleSecretCountdownClick}
-            className="text-rose-400 cursor-pointer text-lg"
+      <footer className="colophon">
+        Made with{" "}
+        <button
+          type="button"
+          className="hidden-trigger heart"
+          onClick={() => setShowCountdown(true)}
+          aria-label="Open the secret countdown"
+        >
+          💕
+        </button>{" "}
+        by <strong>LaskoCreative</strong>
+      </footer>
+
+      {showAgeGate && (
+        <div className="veil" onClick={() => setShowAgeGate(false)}>
+          <div
+            className="note"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="age-title"
+            onClick={(event) => event.stopPropagation()}
           >
-            💕
-          </button>{" "}
-          by <span className="text-rose-400 font-bold">LaskoCreative</span>
-        </p>
-
-        <a href="#secret-countdown" className="sr-only" aria-hidden="true" tabIndex={-1}>
-          Secret countdown link
-        </a>
-      </div>
-
-      {/* Floating action buttons */}
-      <div className="fixed bottom-8 right-8 space-y-4 z-20">
-        <button
-          onClick={handleShowRandomComment}
-          className="w-14 h-14 bg-white rounded-full shadow-xl flex items-center justify-center text-2xl hover:scale-110 transition-all duration-300 border border-rose-200"
-          title="Show random comment"
-        >
-          ✨
-        </button>
-        <button
-          onClick={handleMoodChange}
-          className="w-14 h-14 bg-white rounded-full shadow-xl flex items-center justify-center text-2xl hover:scale-110 transition-all duration-300 border border-rose-200"
-          title={`Current mood: ${mood.charAt(0).toUpperCase() + mood.slice(1)}. Click to change mood.`}
-        >
-          {mood === "light" ? "🌅" : mood === "dreamy" ? "🌙" : "🔥"}
-        </button>
-      </div>
-
-      {/* Age verification modal */}
-      {showAgeVerification && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-md w-full border border-rose-200 text-center">
-            <div className="space-y-6">
-              <div className="text-6xl">🔞</div>
-              <h1 className="text-3xl font-serif text-rose-500">Age Verification Required</h1>
-              <p className="text-rose-600 text-lg leading-relaxed">
-                This content contains graphic adult material. You must be 18 or older to continue.
-              </p>
-              <div className="space-y-4">
-                <button
-                  onClick={handleAgeVerification}
-                  className="w-full bg-rose-500 text-white font-bold py-4 px-8 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
-                >
-                  I am 18 or older
-                </button>
-                <button
-                  onClick={() => setShowAgeVerification(false)}
-                  className="w-full bg-white text-rose-500 font-semibold py-3 px-6 rounded-2xl border border-rose-200 hover:bg-rose-50 transition-all duration-300"
-                >
-                  Innocent
-                </button>
-              </div>
-              <p className="text-rose-400 text-sm">
-                By clicking &ldquo;I am 18 or older&rdquo;, you confirm that you are of legal age to
-                view this content.
-              </p>
+            <h2 id="age-title" className="note-title">
+              Adults only past this page
+            </h2>
+            <p className="note-body">
+              The after-dark lines are graphic. Confirm you are 18 or older to read them.
+            </p>
+            <div className="note-actions">
+              <button type="button" className="note-primary" onClick={confirmAge} autoFocus>
+                I am 18 or older
+              </button>
+              <button type="button" className="note-secondary" onClick={() => setShowAgeGate(false)}>
+                Keep it innocent
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Secret countdown modal */}
       {showCountdown && (
-        <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-          id="secret-countdown"
-        >
-          <div className="bg-white p-8 rounded-3xl shadow-2xl max-w-lg w-full border border-rose-200 text-center space-y-6">
-            <div className="text-5xl">💕</div>
-            <h2 className="text-3xl font-serif text-rose-500">Secret Countdown</h2>
-            <p className="text-rose-600">Counting down to December 17, 2027</p>
-            <div className="grid grid-cols-4 gap-3 text-center">
+        <div className="veil" id="secret-countdown" onClick={() => setShowCountdown(false)}>
+          <div
+            className="note"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="countdown-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="countdown-title" className="note-title">
+              Until December 17, 2027
+            </h2>
+            <div className="countdown">
               {[
-                { label: "Days", value: countdown.days },
-                { label: "Hours", value: countdown.hours },
-                { label: "Minutes", value: countdown.minutes },
-                { label: "Seconds", value: countdown.seconds },
+                { label: "days", value: countdown.days },
+                { label: "hours", value: countdown.hours },
+                { label: "minutes", value: countdown.minutes },
+                { label: "seconds", value: countdown.seconds },
               ].map(({ label, value }) => (
-                <div key={label} className="bg-rose-50 rounded-2xl p-4 border border-rose-200">
-                  <div className="text-2xl font-bold text-rose-500">
-                    {value.toString().padStart(2, "0")}
-                  </div>
-                  <div className="text-xs uppercase tracking-wide text-rose-400">{label}</div>
+                <div key={label} className="countdown-unit">
+                  <span className="countdown-value">{value.toString().padStart(2, "0")}</span>
+                  <span className="countdown-label">{label}</span>
                 </div>
               ))}
             </div>
-            <button
-              onClick={() => setShowCountdown(false)}
-              className="w-full bg-rose-500 text-white font-semibold py-3 px-6 rounded-2xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
-            >
-              Keep it secret
-            </button>
+            <div className="note-actions">
+              <button
+                type="button"
+                className="note-primary"
+                onClick={() => setShowCountdown(false)}
+                autoFocus
+              >
+                Keep it secret
+              </button>
+            </div>
           </div>
         </div>
       )}

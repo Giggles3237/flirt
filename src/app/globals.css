@@ -1,42 +1,771 @@
 @import "tailwindcss";
 
+/*
+  Flirt of the Day — a tear-off desk calendar.
+  The paper stays put; the field behind it and the ink on it warm up with the
+  selected level (data-level on .app).
+*/
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --font-display: "Bodoni Moda Variable", "Bodoni 72", Didot, "Times New Roman", serif;
+  --font-ui: "Schibsted Grotesk Variable", "Helvetica Neue", Arial, sans-serif;
+  --wine: #4a0d25;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+.app {
+  --paper: #fffaf7;
+  --paper-edge: #f1dfdc;
+  --ink: var(--wine);
+  --ink-soft: #8a5a6b;
+  --accent: #f0246e;
+  --on-accent: #ffffff;
+  --field-base: #ff4d8d;
+  --on-field: #ffffff;
+  --chip: rgb(255 255 255 / 0.18);
+  --chip-hover: rgb(255 255 255 / 0.3);
+  --chip-line: rgb(255 255 255 / 0.45);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.app[data-level="innocent"] {
+  --accent: #e2487a;
+  --field-base: #ffd1dc;
+  --on-field: var(--wine);
+  --chip: rgb(255 255 255 / 0.55);
+  --chip-hover: rgb(255 255 255 / 0.85);
+  --chip-line: rgb(74 13 37 / 0.25);
+}
+
+.app[data-level="risque"] {
+  --accent: #c1121f;
+  --field-base: #c1121f;
+}
+
+.app[data-level="afterdark"] {
+  --paper: #210818;
+  --paper-edge: #100209;
+  --ink: #ffd9e6;
+  --ink-soft: #c98aa4;
+  --accent: #ff4d8d;
+  --on-accent: #210818;
+  --field-base: #1a0010;
+  --chip: rgb(255 255 255 / 0.08);
+  --chip-hover: rgb(255 255 255 / 0.16);
+  --chip-line: rgb(255 217 230 / 0.3);
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--wine);
+  background: #ff4d8d;
+  -webkit-font-smoothing: antialiased;
 }
 
-.firework {
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+:focus-visible {
+  outline: 3px solid var(--on-field, #fff);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* ---------- Page frame ---------- */
+
+.app {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(1.25rem, 3vw, 2.5rem) clamp(1rem, 4vw, 3rem);
+  color: var(--on-field);
+  background: var(--field-base);
+  transition: background-color 0.6s ease, color 0.4s ease;
+  overflow-x: clip;
+}
+
+.field {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+}
+
+.masthead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  max-width: 68rem;
+  margin: 0 auto;
+}
+
+.wordmark {
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+}
+
+.tagline {
+  margin: 0.35rem 0 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+/* Hidden triggers look like the text around them. */
+.hidden-trigger {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: text;
+}
+
+.hidden-trigger.heart {
+  cursor: default;
+  font-size: 1.1em;
+}
+
+.field-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border: 1px solid var(--chip-line);
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--on-field);
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  backdrop-filter: blur(8px);
+  transition: background-color 0.15s ease;
+}
+
+.field-button:hover:not(:disabled) {
+  background: var(--chip-hover);
+}
+
+.field-button:disabled {
+  opacity: 0.45;
+}
+
+/* ---------- The calendar pad ---------- */
+
+.stage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: clamp(1.5rem, 4vh, 3rem) 0;
+  position: relative;
+}
+
+.pad-wrap {
+  position: relative;
+  width: min(100%, 30rem);
+}
+
+.pad {
+  position: relative;
+  border-radius: 6px;
+  /* The rest of the year, stacked underneath. */
+  box-shadow:
+    0 5px 0 -1px var(--paper),
+    0 5px 0 0 var(--paper-edge),
+    0 10px 0 -1px var(--paper),
+    0 10px 0 0 var(--paper-edge),
+    0 15px 0 -1px var(--paper),
+    0 15px 0 0 var(--paper-edge),
+    0 40px 60px -20px rgb(40 0 20 / 0.45);
+  transition: box-shadow 0.5s ease;
+}
+
+.band {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 1.5rem 0.7rem 0.9rem;
+  border-radius: 6px 6px 0 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  transition: background-color 0.5s ease, color 0.5s ease;
+}
+
+.band-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2.75rem;
+  padding: 0 0.6rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+}
+
+.band-button:hover {
+  background: rgb(255 255 255 / 0.16);
+}
+
+.band-button:focus-visible {
+  outline-color: var(--on-accent);
+}
+
+.band-month {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.band-year {
+  font-weight: 600;
+  font-size: 0.95rem;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.sheet-slot {
+  position: relative;
+  min-height: 27rem;
+  border-radius: 0 0 6px 6px;
+  background: var(--paper);
+  transition: background-color 0.5s ease;
+}
+
+.sheet {
+  display: flex;
+  flex-direction: column;
+  min-height: 27rem;
+  padding: 1.75rem 1.5rem 1.5rem;
+  border-radius: 0 0 6px 6px;
+  background: var(--paper);
+  color: var(--ink);
+  /* Perforation where the sheet meets the band. */
+  background-image: radial-gradient(circle at 5px 0, var(--paper-edge) 2.5px, transparent 3px);
+  background-size: 10px 6px;
+  background-repeat: repeat-x;
+  transition: background-color 0.5s ease, color 0.5s ease;
+}
+
+.sheet-torn {
   position: absolute;
-  animation: firework 1s ease-out forwards;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  transform-origin: top right;
+  box-shadow: 0 12px 30px -10px rgb(40 0 20 / 0.4);
+  animation: tear 0.55s cubic-bezier(0.5, 0, 0.85, 0.4) forwards;
 }
 
-@keyframes firework {
+.sheet-torn .line {
+  animation: none;
+}
+
+@keyframes tear {
   0% {
-    transform: scale(0);
+    transform: rotate(0) translate(0, 0);
+    opacity: 1;
+  }
+  30% {
+    transform: rotate(-3deg) translate(-6px, 10px);
+    opacity: 1;
+  }
+  70% {
     opacity: 1;
   }
   100% {
-    transform: scale(1.5);
+    transform: rotate(-16deg) translate(-90px, 115%);
     opacity: 0;
+  }
+}
+
+.sheet-date {
+  display: flex;
+  align-items: flex-end;
+  gap: 1.1rem;
+}
+
+.numeral {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(6rem, 30vw, 9rem);
+  line-height: 0.78;
+  letter-spacing: -0.04em;
+  color: var(--accent);
+  font-variant-numeric: lining-nums;
+  transition: color 0.5s ease;
+}
+
+.sheet-day {
+  min-width: 0;
+  padding-bottom: 0.15rem;
+}
+
+.weekday {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink-soft);
+}
+
+.special {
+  margin: 0.1rem 0 0;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 1.2rem;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.line {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  margin: 1.75rem 0 1.5rem;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.22;
+  text-wrap: pretty;
+  animation: line-in 0.35s ease both;
+}
+
+.line-short {
+  font-size: clamp(1.9rem, 7.5vw, 2.5rem);
+}
+
+.line-medium {
+  font-size: clamp(1.6rem, 6vw, 2rem);
+}
+
+.line-long {
+  font-size: clamp(1.35rem, 5vw, 1.65rem);
+  line-height: 1.3;
+}
+
+@keyframes line-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.sheet-actions {
+  display: flex;
+  gap: 0.6rem;
+  min-height: 2.75rem;
+}
+
+.sheet-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  padding: 0 1.1rem;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  background: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.sheet-button:hover {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.sheet-button:focus-visible {
+  outline-color: var(--accent);
+}
+
+/* ---------- Photo clipped to the pad ---------- */
+
+.snapshot {
+  width: 15rem;
+  margin: 0.75rem auto 0;
+  padding: 0.6rem 0.6rem 0.5rem;
+  background: #fffdfb;
+  color: var(--wine);
+  border-radius: 3px;
+  box-shadow: 0 18px 30px -14px rgb(40 0 20 / 0.55);
+  transform: rotate(-3deg);
+  animation: snapshot-in 0.4s ease both;
+}
+
+.snapshot img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #f3dfe2;
+}
+
+.snapshot figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-top: 0.4rem;
+  font-size: 0.78rem;
+  line-height: 1.3;
+}
+
+.snapshot a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.snapshot-refresh {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+}
+
+.snapshot-refresh:hover {
+  background: #f8e3e8;
+}
+
+.snapshot-refresh:focus-visible {
+  outline-color: var(--wine);
+}
+
+@keyframes snapshot-in {
+  from {
+    opacity: 0;
+    transform: rotate(0deg) translateY(8px);
+  }
+}
+
+@media (min-width: 68rem) {
+  /* Clipped to the right edge of the pad, clear of the text. */
+  .snapshot {
+    position: absolute;
+    left: calc(50% + 15rem - 1.25rem);
+    top: calc(50% - 5rem);
+    z-index: 4;
+    margin: 0;
+    transform: rotate(5deg);
+  }
+}
+
+/* ---------- Heat control and day navigation ---------- */
+
+.heat {
+  display: inline-flex;
+  padding: 0.25rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--chip-line);
+  border-radius: 999px;
+  background: var(--chip);
+  backdrop-filter: blur(8px);
+}
+
+.heat-stop {
+  min-height: 2.5rem;
+  padding: 0 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--on-field);
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.heat-stop:hover {
+  background: var(--chip-hover);
+}
+
+.heat-stop[aria-checked="true"] {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 2px 8px -2px rgb(40 0 20 / 0.35);
+}
+
+.app[data-level="afterdark"] .heat-stop[aria-checked="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.day-nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+.day-nav .field-button {
+  font-variant-numeric: tabular-nums;
+}
+
+.colophon {
+  text-align: center;
+  font-size: 0.85rem;
+  opacity: 0.9;
+}
+
+/* ---------- Date picker ---------- */
+
+.picker {
+  position: absolute;
+  top: calc(100% - 0.25rem);
+  left: 0.9rem;
+  z-index: 10;
+  width: min(19rem, calc(100vw - 3rem));
+  padding: 0.9rem;
+  border-radius: 10px;
+  background: #fffdfb;
+  color: var(--wine);
+  box-shadow: 0 24px 50px -16px rgb(40 0 20 / 0.6), 0 0 0 1px rgb(74 13 37 / 0.08);
+}
+
+.picker :focus-visible {
+  outline-color: var(--wine);
+}
+
+.picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.picker-month {
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 1.25rem;
+}
+
+.picker-step {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+}
+
+.picker-step:hover {
+  background: #f8e3e8;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.picker-weekday {
+  padding: 0.25rem 0;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #8a5a6b;
+}
+
+.picker-day {
+  aspect-ratio: 1;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.picker-day:hover:not(:disabled) {
+  background: #f8e3e8;
+}
+
+.picker-day:disabled {
+  opacity: 0.3;
+}
+
+.picker-day.is-today {
+  box-shadow: inset 0 0 0 1.5px #f0246e;
+}
+
+.picker-day.is-selected {
+  background: var(--wine);
+  color: #fff;
+  font-weight: 700;
+}
+
+/* ---------- Modals ---------- */
+
+.veil {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgb(31 7 22 / 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.note {
+  width: min(100%, 26rem);
+  padding: 2rem 1.75rem 1.75rem;
+  border-radius: 6px;
+  background: #fffaf7;
+  color: var(--wine);
+  box-shadow: 0 40px 70px -24px rgb(0 0 0 / 0.6);
+  transform: rotate(-1deg);
+}
+
+.note :focus-visible {
+  outline-color: var(--wine);
+}
+
+.note-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-weight: 600;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.note-body {
+  margin: 0.9rem 0 0;
+  max-width: 34ch;
+}
+
+.note-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 1.5rem;
+}
+
+.note-primary,
+.note-secondary {
+  min-height: 3rem;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+.note-primary {
+  border: 0;
+  background: #c1121f;
+  color: #fff;
+}
+
+.note-primary:hover {
+  background: #9d0208;
+}
+
+.note-secondary {
+  border: 1.5px solid currentColor;
+  background: none;
+}
+
+.note-secondary:hover {
+  background: #f8e3e8;
+}
+
+.countdown {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.countdown-unit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.9rem 0 0.7rem;
+  border-top: 5px solid #f0246e;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgb(74 13 37 / 0.1);
+}
+
+.countdown-value {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 2rem;
+  line-height: 1;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.countdown-label {
+  margin-top: 0.3rem;
+  font-size: 0.78rem;
+  color: #8a5a6b;
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 30rem) {
+  .masthead .field-button {
+    padding: 0 0.9rem;
+  }
+
+  .heat-stop {
+    padding: 0 0.8rem;
+  }
+
+  .sheet {
+    padding: 1.5rem 1.15rem 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-torn {
+    display: none;
+  }
+
+  .line,
+  .snapshot {
+    animation: none;
+  }
+
+  .app,
+  .pad,
+  .band,
+  .sheet,
+  .sheet-slot,
+  .numeral {
+    transition: none;
   }
 }

@@ -1,16 +1,20 @@
-// my-flirty-website\src\app\layout.tsx
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css'; // Your global styles including Tailwind
-
-const inter = Inter({ subsets: ['latin'] });
+import type { Metadata, Viewport } from "next";
+import "@fontsource-variable/bodoni-moda/opsz.css";
+import "@fontsource-variable/bodoni-moda/opsz-italic.css";
+import "@fontsource-variable/schibsted-grotesk/wght.css";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: 'Flirt of the Day',
-  description: 'Daily flirty comments for every occasion',
+  title: "Flirt of the Day",
+  description: "A tear-off calendar with a fresh pickup line for every day of the year.",
   icons: {
-    icon: '/lips.svg',
+    icon: "/lips.svg",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -20,9 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
